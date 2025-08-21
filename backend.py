@@ -69,15 +69,14 @@ class ServicePackage(db.Model):
 
 class Booking(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    job_description = db.Column(db.Text, nullable=False)
-    booking_date = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    service_id = db.Column(db.Integer, db.ForeignKey('service_package.id'), nullable=False)
+    booking_date = db.Column(db.Date, nullable=False)
     status = db.Column(db.String(20), nullable=False, default='pending')
     client_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     pilot_profile_id = db.Column(db.Integer, db.ForeignKey('pilot_profile.id'), nullable=False)
-    # LA LÍNEA 'client = ...' HA SIDO ELIMINADA PARA CORREGIR EL ERROR
-    # LA LÍNEA 'pilot = ...' HA SIDO ELIMINADA PARA CORREGIR EL ERROR
+    service = db.relationship('ServicePackage')
     def to_dict(self):
-        return {"id": self.id, "job_description": self.job_description, "status": self.status, "client_email": self.client.email, "pilot_name": self.pilot.name}
+        return {"id": self.id, "service_name": self.service.name, "booking_date": self.booking_date.strftime('%Y-%m-%d'), "status": self.status, "client_email": self.client.email, "pilot_name": self.pilot.name}
 
 class PortfolioItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -93,7 +92,7 @@ class Availability(db.Model):
     status = db.Column(db.String(20), nullable=False, default='available')
     pilot_profile_id = db.Column(db.Integer, db.ForeignKey('pilot_profile.id'), nullable=False)
 
-# --- (Resto del código de las rutas y el inicio del servidor sin cambios) ---
+# --- RUTAS DE LA API ---
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
     return send_from_directory(os.path.join(app.instance_path, 'static', 'uploads'), filename)
@@ -187,11 +186,16 @@ def create_booking():
     data = request.get_json()
     client = User.query.filter_by(email=data.get('client_email')).first()
     pilot = PilotProfile.query.get(data.get('pilot_id'))
-    if not client or not pilot: return jsonify({"error": "Cliente o piloto no encontrado"}), 404
-    new_booking = Booking(client_id=client.id, pilot_profile_id=pilot.id, job_description=data.get('job_description'))
+    date_obj = datetime.strptime(data.get('date'), '%Y-%m-%d').date()
+    service_id = data.get('service_id')
+    if not all([client, pilot, date_obj, service_id]): return jsonify({"error": "Faltan datos para la reserva"}), 400
+    availability = Availability.query.filter_by(pilot_profile_id=pilot.id, date=date_obj, status='available').first()
+    if not availability: return jsonify({"error": "La fecha seleccionada no está disponible"}), 409
+    availability.status = 'booked'
+    new_booking = Booking(client_id=client.id, pilot_profile_id=pilot.id, service_id=service_id, booking_date=date_obj, status='confirmed')
     db.session.add(new_booking)
     db.session.commit()
-    return jsonify({"message": "Solicitud de reserva enviada"}), 201
+    return jsonify({"message": "Reserva confirmada con éxito"}), 201
 
 @app.route("/api/bookings", methods=['GET'])
 def get_bookings():
@@ -204,9 +208,26 @@ def get_bookings():
     else:
         bookings = []
     return jsonify([b.to_dict() for b in bookings])
+        
+@app.route("/api/profile/availability", methods=['POST'])
+def update_availability():
+    data = request.get_json()
+    email, dates = data.get('email'), data.get('dates', [])
+    user = User.query.filter_by(email=email).first()
+    if not user or user.role != 'Piloto' or not user.pilot_profile:
+        return jsonify({"error": "Piloto no autorizado"}), 403
+    Availability.query.filter_by(pilot_profile_id=user.pilot_profile.id).delete()
+    for date_str in dates:
+        date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
+        db.session.add(Availability(date=date_obj, status='available', pilot_profile_id=user.pilot_profile.id))
+    db.session.commit()
+    return jsonify({"message": "Disponibilidad actualizada con éxito"})
 
 # --- INICIO DEL SERVIDOR ---
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
+        from setup_db import seed_database
+        seed_database()
+        
     app.run(debug=True, host='0.0.0.0', port=5000)
