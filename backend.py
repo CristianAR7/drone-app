@@ -92,7 +92,7 @@ class Availability(db.Model):
     status = db.Column(db.String(20), nullable=False, default='available')
     pilot_profile_id = db.Column(db.Integer, db.ForeignKey('pilot_profile.id'), nullable=False)
 
-# --- RUTAS DE LA API ---
+# --- RUTAS DE LA API (todas las que ya teníamos) ---
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
     return send_from_directory(os.path.join(app.instance_path, 'static', 'uploads'), filename)
@@ -227,6 +227,8 @@ def update_availability():
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
+        # Importamos la función de nuestro script de setup y la ejecutamos.
+        # Esto rellenará la base de datos la primera vez que arranque el servidor.
         from setup_db import seed_database
         seed_database()
         
