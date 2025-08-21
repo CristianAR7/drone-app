@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DroneConnect</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+    tailwind.config = {
+        theme: { extend: { colors: { 'primary': '#3B82F6', 'secondary': '#1E293B', 'accent': '#FBBF24', 'light': '#F1F5F9', 'dark': '#0F172A' } } }
+    }
+    </script>
+</head>
+<body class="bg-light">
+
+    <nav class="bg-secondary shadow-lg sticky top-0 z-50">
+        <div class="container mx-auto px-6 py-4 flex justify-between items-center">
+            <h1 class="text-2xl font-bold text-accent">DroneConnect</h1>
+            <div id="nav-auth-links" class="flex items-center space-x-4">
+                <button onclick="openRegisterModal()" class="text-light hover:text-accent font-medium">Sign Up</button>
+                <button onclick="openLoginModal()" class="bg-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-700">Sign In</button>
+            </div>
+            <div id="user-info" class="hidden items-center space-x-4 text-light">
+                <span id="user-email-display"></span>
+                <button onclick="handleLogout()" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg">Logout</button>
+            </div>
+        </div>
+    </nav>
+
+    <header id="hero-section" class="relative bg-cover bg-center h-96" style="background-image: url('https://images.pexels.com/photos/1034425/pexels-photo-1034425.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2');"></header>
+
+    <main class="container mx-auto px-4 py-8">
+        <div id="pilot-dashboard-section" class="bg-white p-6 rounded-xl shadow-lg mb-12" style="display: none;">
+            <div class="border-b border-gray-200">
+                <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+                    <button onclick="switchTab('bookings')" id="tab-bookings" class="border-primary text-primary whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">Mis Reservas</button>
+                    <button onclick="switchTab('profile')" id="tab-profile" class="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">Editar Perfil y Portfolio</button>
+                </nav>
+            </div>
+            <div id="tab-content-bookings" class="py-4"><div id="bookings-list" class="space-y-4"></div></div>
+            <div id="tab-content-profile" class="py-4 hidden"></div>
+        </div>
+
+        <div id="client-bookings-section" class="bg-white p-6 rounded-xl shadow-lg mb-12" style="display: none;">
+            <h2 class="text-2xl font-bold text-secondary mb-4">Mis Reservas</h2>
+            <div id="client-bookings-list" class="space-y-4"></div>
+        </div>
+        
+        <div id="public-content">
+             <div id="ai-search-section" class="bg-white p-6 rounded-xl shadow-lg mb-12 -mt-20 relative z-10">
+                <h2 class="text-2xl font-bold text-secondary mb-4">Búsqueda Inteligente</h2>
+                <p class="text-gray-600 mb-4">Describe lo que necesitas y la IA te recomendará el mejor piloto.</p>
+                <div class="flex flex-col sm:flex-row gap-2">
+                    <input type="text" id="ai-search-input" placeholder="Ej: 'Piloto para grabar una boda en Madrid'" class="w-full px-4 py-2 border rounded-lg">
+                    <button id="ai-search-button" class="bg-accent text-secondary font-bold py-2 px-6 rounded-lg">Buscar con IA</button>
+                </div>
+                <div id="ai-result-container" class="mt-4 p-4 bg-blue-50 border-blue-200 rounded-lg hidden"></div>
+            </div>
+    
+            <h2 id="pilots-title" class="text-4xl font-bold text-secondary mb-8 text-center">Explora Nuestros Pilotos</h2>
+            <div id="pilots-container" class="grid sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"></div>
+        </div>
+    </main>
+
+    <div id="register-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden"></div>
+    <div id="login-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden"></div>
+    <div id="booking-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden"></div>
+    <div id="pilot-detail-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden p-4">
+        <div id="pilot-detail-content" class="bg-white p-6 rounded-lg shadow-xl w-full max-w-2xl max-h-full overflow-y-auto"></div>
+    </div>
+    
+    <script>
+        let currentUser = null;
+        const API_URL = 'http://127.0.0.1:5000';
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadAllPilots();
+            document.getElementById('ai-search-button').addEventListener('click', handleAiSearch);
+        });
+
+        function updateUIAfterLogin() {
+            if (!currentUser) return;
+            document.getElementById('nav-auth-links').classList.add('hidden');
+            const userInfo = document.getElementById('user-info');
+            userInfo.classList.remove('hidden');
+            userInfo.classList.add('flex');
+            userInfo.querySelector('span').innerText = currentUser.username;
+            closeLoginModal();
+
+            if (currentUser.role === 'Piloto') {
+                document.getElementById('pilot-dashboard-section').style.display = 'block';
+                document.getElementById('public-content').style.display = 'none';
+                switchTab('bookings'); 
+            } else {
+                document.getElementById('client-bookings-section').style.display = 'block';
+                loadMyBookings();
+            }
+        }
+
+        function handleLogout() {
+            currentUser = null;
+            document.getElementById('nav-auth-links').classList.remove('hidden');
+            document.getElementById('user-info').classList.add('hidden');
+            document.getElementById('client-bookings-section').style.display = 'none';
+            document.getElementById('pilot-dashboard-section').style.display = 'none';
+            document.getElementById('public-content').style.display = 'block';
+            loadAllPilots();
+        }
+
+        function switchTab(tabName) {
+            const tabs = ['bookings', 'profile'];
+            tabs.forEach(tab => {
+                document.getElementById(`tab-content-${tab}`).classList.add('hidden');
+                document.getElementById(`tab-${tab}`).classList.remove('border-primary', 'text-primary');
+            });
+            document.getElementById(`tab-content-${tabName}`).classList.remove('hidden');
+            document.getElementById(`tab-${tabName}`).classList.add('border-primary', 'text-primary');
+
+            if (tabName === 'profile') renderProfileForm();
+            if (tabName === 'bookings') loadMyBookings();
+        }
+        
+        function openLoginModal() {
+            const modal = document.getElementById('login-modal');
+            modal.classList.remove('hidden');
+            modal.innerHTML = `
+                <div class="bg-white p-6 rounded-xl shadow-lg w-full max-w-sm">
+                    <h2 class="text-2xl font-bold text-secondary mb-4">Iniciar Sesión</h2>
+                    <div class="space-y-4">
+                        <input type="email" id="login-email" placeholder="Correo electrónico" class="w-full px-4 py-2 border rounded-lg">
+                        <input type="password" id="login-password" placeholder="Contraseña" class="w-full px-4 py-2 border rounded-lg">
+                        <button id="login-button-modal" class="w-full bg-primary text-white font-bold py-2 rounded-lg">Entrar</button>
+                        <button onclick="closeLoginModal()" class="w-full bg-gray-200 text-gray-800 font-bold py-2 rounded-lg">Cancelar</button>
+                    </div>
+                    <div id="login-message" class="mt-4 text-center"></div>
+                </div>`;
+            document.getElementById('login-button-modal').addEventListener('click', handleLogin);
+        }
+        function closeLoginModal() { document.getElementById('login-modal').classList.add('hidden'); }
+
+        function openRegisterModal() {
+            const modal = document.getElementById('register-modal');
+            modal.classList.remove('hidden');
+            modal.innerHTML = `
+                <div class="bg-white p-6 rounded-xl shadow-lg w-full max-w-sm">
+                    <h2 class="text-2xl font-bold text-secondary mb-4">Crea tu Cuenta</h2>
+                    <div class="space-y-4">
+                        <input type="text" id="register-username" placeholder="Nombre de usuario" class="w-full px-4 py-2 border rounded-lg">
+                        <input type="email" id="register-email" placeholder="Correo electrónico" class="w-full px-4 py-2 border rounded-lg">
+                        <input type="password" id="register-password" placeholder="Contraseña" class="w-full px-4 py-2 border rounded-lg">
+                        <input type="password" id="register-password-confirm" placeholder="Confirmar contraseña" class="w-full px-4 py-2 border rounded-lg">
+                        <div class="flex items-center space-x-4"><span class="text-gray-700">Registrarme como:</span><label><input type="radio" name="role" value="Cliente" checked> Cliente</label><label><input type="radio" name="role" value="Piloto"> Piloto</label></div>
+                        <button id="register-button-modal" class="w-full bg-primary text-white font-bold py-2 rounded-lg">Registrarse</button>
+                        <button onclick="closeRegisterModal()" class="w-full bg-gray-200 text-gray-800 font-bold py-2 rounded-lg">Cancelar</button>
+                    </div>
+                    <div id="register-message" class="mt-4 text-center"></div>
+                </div>`;
+            document.getElementById('register-button-modal').addEventListener('click', handleRegister);
+        }
+        function closeRegisterModal() { document.getElementById('register-modal').classList.add('hidden'); }
+        
+        async function openPilotDetailModal(profileId) {
+            const modal = document.getElementById('pilot-detail-modal');
+            const content = document.getElementById('pilot-detail-content');
+            modal.classList.remove('hidden');
+            content.innerHTML = '<p>Cargando perfil...</p>';
+            
+            try {
+                const response = await fetch(`${API_URL}/api/pilots/${profileId}`);
+                if (!response.ok) throw new Error('Piloto no encontrado');
+                const pilot = await response.json();
+                
+                let servicesHTML = '<p class="text-gray-600">No hay servicios definidos.</p>';
+                if (pilot.eventPackages && pilot.eventPackages.length > 0) {
+                    servicesHTML = pilot.eventPackages.map(s => `
+                        <div class="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                            <h4 class="font-semibold text-primary">${s.name} - ${s.price}€</h4>
+                            <p class="text-sm text-gray-700">${s.description}</p>
+                        </div>
+                    `).join('');
+                }
+
+                let portfolioHTML = '<p class="text-gray-600">No hay imágenes en el portfolio.</p>';
+                if (pilot.portfolio && pilot.portfolio.length > 0) {
+                    portfolioHTML = pilot.portfolio.map(item => `<img src="${API_URL}${item.url}" class="w-full h-40 object-cover rounded-lg shadow-md">`).join('');
+                }
+                
+                let bookingButtonHTML = '';
+                if (currentUser && currentUser.role === 'Cliente') {
+                    bookingButtonHTML = `<button onclick="openBookingModal(${pilot.id}, '${pilot.name}')" class="mt-6 w-full text-center bg-accent text-secondary font-semibold py-2 px-4 rounded-lg">Solicitar Reserva</button>`;
+                }
+                
+                content.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <h2 class="text-3xl font-bold text-secondary mb-4">${pilot.name}</h2>
+                        <button onclick="closePilotDetailModal()" class="text-2xl font-bold text-gray-500 hover:text-gray-800">&times;</button>
+                    </div>
+                    <p class="text-lg text-gray-600 mb-2">${pilot.tagline}</p>
+                    <p class="text-sm text-gray-500 mb-4">${pilot.location}</p>
+                    <p class="text-gray-700 mb-6">${pilot.bio}</p>
+                    <h3 class="text-xl font-bold text-secondary mb-3">Servicios Ofrecidos</h3>
+                    <div class="space-y-2 mb-6">${servicesHTML}</div>
+                    <h3 class="text-xl font-bold text-secondary mb-3">Portfolio</h3>
+                    <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">${portfolioHTML}</div>
+                    ${bookingButtonHTML}
+                `;
+            } catch (error) {
+                content.innerHTML = `<p class="text-red-500">No se pudo cargar el perfil del piloto. ${error.message}</p>`;
+            }
+        }
+        function closePilotDetailModal() { document.getElementById('pilot-detail-modal').classList.add('hidden'); }
+        
+        async function handleLogin() {
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            const messageDiv = document.getElementById('login-message');
+            try {
+                const response = await fetch(`${API_URL}/api/login`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error);
+                currentUser = data.user;
+                updateUIAfterLogin();
+            } catch (error) {
+                if(messageDiv) messageDiv.innerText = `Error: ${error.message}`;
+            }
+        }
+        
+        async function handleRegister() {
+            const username = document.getElementById('register-username').value;
+            const email = document.getElementById('register-email').value;
+            const password = document.getElementById('register-password').value;
+            const password_confirm = document.getElementById('register-password-confirm').value;
+            const role = document.querySelector('input[name="role"]:checked').value;
+            const messageDiv = document.getElementById('register-message');
+            if (password !== password_confirm) {
+                messageDiv.innerText = 'Las contraseñas no coinciden.';
+                return;
+            }
+            try {
+                const response = await fetch(`${API_URL}/api/register`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, email, password, password_confirm, role })
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error);
+                messageDiv.innerText = data.message + " Ahora puedes iniciar sesión.";
+                setTimeout(closeRegisterModal, 2000);
+            } catch (error) {
+                if(messageDiv) messageDiv.innerText = `Error: ${error.message}`;
+            }
+        }
+
+        async function loadAllPilots() {
+            const container = document.getElementById('pilots-container');
+            container.innerHTML = '<p class="col-span-full text-center">Cargando pilotos...</p>';
+            try {
+                const response = await fetch(`${API_URL}/api/pilots`);
+                const pilots = await response.json();
+                container.innerHTML = '';
+                if (pilots.length === 0) {
+                    container.innerHTML = '<p class="col-span-full text-center">No hay pilotos registrados.</p>';
+                    return;
+                }
+                pilots.forEach(pilot => {
+                    const pilotCardHTML = `
+                        <div class="bg-white rounded-xl shadow-lg overflow-hidden flex flex-col">
+                            <img class="w-full h-56 object-cover" src="${pilot.profilePictureUrl}" alt="${pilot.name}">
+                            <div class="p-6 flex flex-col flex-grow">
+                                <h3 class="text-2xl font-semibold text-secondary mb-1">${pilot.name}</h3>
+                                <p class="text-gray-600 text-sm mb-3 flex-grow">${pilot.tagline || ''}</p>
+                                <button onclick="openPilotDetailModal(${pilot.id})" class="mt-auto w-full text-center bg-primary text-white font-semibold py-2 px-4 rounded-lg">Ver Perfil</button>
+                            </div>
+                        </div>`;
+                    container.innerHTML += pilotCardHTML;
+                });
+            } catch (error) {
+                container.innerHTML = '<p class="col-span-full text-center text-red-500">No se pudieron cargar los pilotos.</p>';
+            }
+        }
+        
+        async function handleAiSearch() {
+            const input = document.getElementById('ai-search-input');
+            const resultContainer = document.getElementById('ai-result-container');
+            const userQuery = input.value;
+            if (!userQuery) return;
+            resultContainer.classList.remove('hidden');
+            resultContainer.innerHTML = 'Buscando... 🤖';
+            try {
+                const response = await fetch(`${API_URL}/api/search`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: userQuery })
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error);
+                resultContainer.innerHTML = data.recommendation.replace(/\n/g, '<br>');
+            } catch (error) {
+                resultContainer.innerHTML = `Error: ${error.message}`;
+            }
+        }
+        
+        function renderProfileForm() {
+             document.getElementById('tab-content-profile').innerHTML = `
+                <div>
+                    <h3 class="text-xl font-bold text-secondary mb-4">Editar Perfil Básico</h3>
+                    <div class="space-y-4">
+                        <input type="text" id="profile-name" placeholder="Nombre Público" class="w-full px-4 py-2 border rounded-lg">
+                        <input type="text" id="profile-tagline" placeholder="Eslogan" class="w-full px-4 py-2 border rounded-lg">
+                        <input type="text" id="profile-location" placeholder="Ubicación" class="w-full px-4 py-2 border rounded-lg">
+                        <textarea id="profile-bio" placeholder="Biografía" class="w-full px-4 py-2 border rounded-lg" rows="4"></textarea>
+                        <button id="profile-save-button" class="w-full bg-accent text-secondary font-bold py-2 px-6 rounded-lg">Guardar Cambios de Perfil</button>
+                    </div>
+                    <div id="profile-message" class="mt-4 text-center"></div>
+                </div>
+                <hr class="my-6">
+                <div>
+                    <h3 class="text-xl font-bold text-secondary mb-4">Mis Servicios</h3>
+                    <div id="service-list" class="space-y-2 mb-4"></div>
+                    <div class="space-y-4 p-4 border rounded-lg">
+                        <h4 class="font-semibold">Añadir Nuevo Servicio</h4>
+                        <input type="text" id="service-name" placeholder="Nombre del servicio" class="w-full px-4 py-2 border rounded-lg">
+                        <input type="number" id="service-price" placeholder="Precio" class="w-full px-4 py-2 border rounded-lg">
+                        <textarea id="service-description" placeholder="Descripción del servicio" class="w-full px-4 py-2 border rounded-lg" rows="3"></textarea>
+                        <button id="service-add-button" class="w-full bg-primary text-white font-bold py-2 px-6 rounded-lg">Añadir Servicio</button>
+                        <div id="service-message" class="mt-2 text-center"></div>
+                    </div>
+                </div>
+                <hr class="my-6">
+                <div>
+                    <h3 class="text-xl font-bold text-secondary mb-4">Mi Portfolio</h3>
+                    <div id="portfolio-gallery" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-4"></div>
+                    <div class="space-y-4 p-4 border rounded-lg">
+                        <h4 class="font-semibold">Añadir Nueva Foto</h4>
+                        <input type="file" id="portfolio-file-input" class="w-full">
+                        <button id="portfolio-upload-button" class="w-full bg-primary text-white font-bold py-2 px-6 rounded-lg">Subir Foto</button>
+                        <div id="portfolio-message" class="mt-2 text-center"></div>
+                    </div>
+                </div>`;
+            document.getElementById('profile-save-button').addEventListener('click', handleProfileUpdate);
+            document.getElementById('portfolio-upload-button').addEventListener('click', handlePortfolioUpload);
+            document.getElementById('service-add-button').addEventListener('click', handleServiceAdd);
+            loadMyProfile();
+            loadMyServices();
+        }
+
+        async function handleProfileUpdate() {
+            const profileData = {
+                email: currentUser.email,
+                name: document.getElementById('profile-name').value,
+                tagline: document.getElementById('profile-tagline').value,
+                location: document.getElementById('profile-location').value,
+                bio: document.getElementById('profile-bio').value,
+            };
+            const messageDiv = document.getElementById('profile-message');
+            try {
+                const response = await fetch(`${API_URL}/api/profile`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(profileData)
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error);
+                messageDiv.innerText = data.message;
+                loadAllPilots();
+            } catch(error) {
+                messageDiv.innerText = `Error: ${error.message}`;
+            }
+        }
+        
+        async function handlePortfolioUpload() {
+            const fileInput = document.getElementById('portfolio-file-input');
+            const file = fileInput.files[0];
+            const messageDiv = document.getElementById('portfolio-message');
+            if (!file) { messageDiv.innerText = 'Por favor, selecciona un archivo.'; return; }
+            const formData = new FormData();
+            formData.append('email', currentUser.email);
+            formData.append('file', file);
+            try {
+                const response = await fetch(`${API_URL}/api/profile/portfolio`, {
+                    method: 'POST', body: formData
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error);
+                messageDiv.innerText = data.message;
+                fileInput.value = '';
+                loadMyPortfolio();
+            } catch (error) {
+                messageDiv.innerText = `Error: ${error.message}`;
+            }
+        }
+
+        async function loadMyProfile() {
+            try {
+                const response = await fetch(`${API_URL}/api/pilots`);
+                const pilots = await response.json();
+                const myProfile = pilots.find(p => p.user_id === currentUser.id);
+                if (myProfile) {
+                    document.getElementById('profile-name').value = myProfile.name || '';
+                    document.getElementById('profile-tagline').value = myProfile.tagline || '';
+                    document.getElementById('profile-location').value = myProfile.location || '';
+                    document.getElementById('profile-bio').value = myProfile.bio || '';
+                }
+                loadMyPortfolio();
+            } catch (error) {
+                console.error("Error al cargar datos del perfil:", error);
+            }
+        }
+        
+        async function loadMyPortfolio() {
+            const gallery = document.getElementById('portfolio-gallery');
+            gallery.innerHTML = 'Cargando portfolio...';
+            try {
+                const response = await fetch(`${API_URL}/api/pilots`);
+                const pilots = await response.json();
+                const myProfile = pilots.find(p => p.user_id === currentUser.id);
+                if (myProfile && myProfile.portfolio && myProfile.portfolio.length > 0) {
+                    gallery.innerHTML = '';
+                    myProfile.portfolio.forEach(item => {
+                        const imgHTML = `<img src="${API_URL}${item.url}" class="w-full h-32 object-cover rounded-lg">`;
+                        gallery.innerHTML += imgHTML;
+                    });
+                } else {
+                    gallery.innerHTML = '<p class="col-span-full">Aún no has subido ninguna foto.</p>';
+                }
+            } catch (error) {
+                gallery.innerHTML = '<p class="col-span-full text-red-500">Error al cargar el portfolio.</p>';
+            }
+        }
+        
+        async function loadMyServices() {
+            const list = document.getElementById('service-list');
+            list.innerHTML = 'Cargando servicios...';
+            try {
+                const response = await fetch(`${API_URL}/api/pilots`);
+                const pilots = await response.json();
+                const myProfile = pilots.find(p => p.user_id === currentUser.id);
+                if (myProfile && myProfile.eventPackages && myProfile.eventPackages.length > 0) {
+                    list.innerHTML = '';
+                    myProfile.eventPackages.forEach(s => {
+                        const serviceHTML = `<div class="border p-3 rounded-lg"><h4 class="font-semibold">${s.name} - ${s.price}€</h4><p class="text-sm">${s.description}</p></div>`;
+                        list.innerHTML += serviceHTML;
+                    });
+                } else {
+                    list.innerHTML = '<p>Aún no has añadido ningún servicio.</p>';
+                }
+            } catch (error) {
+                list.innerHTML = '<p class="text-red-500">Error al cargar los servicios.</p>';
+            }
+        }
+        
+        async function handleServiceAdd() {
+            const serviceData = {
+                email: currentUser.email,
+                name: document.getElementById('service-name').value,
+                price: parseInt(document.getElementById('service-price').value),
+                description: document.getElementById('service-description').value
+            };
+            const messageDiv = document.getElementById('service-message');
+            try {
+                const response = await fetch(`${API_URL}/api/profile/services`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(serviceData)
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error);
+                messageDiv.innerText = data.message;
+                document.getElementById('service-name').value = '';
+                document.getElementById('service-price').value = '';
+                document.getElementById('service-description').value = '';
+                loadMyServices();
+                loadAllPilots();
+            } catch (error) {
+                messageDiv.innerText = `Error: ${error.message}`;
+            }
+        }
+
+        function openBookingModal(pilotId, pilotName, date) {
+            const modal = document.getElementById('booking-modal');
+            modal.classList.remove('hidden');
+            modal.innerHTML = `
+                <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
+                    <h2 class="text-2xl font-bold text-secondary mb-4">Confirmar Reserva</h2>
+                    <p class="mb-2">Piloto: <strong>${pilotName}</strong></p>
+                    <p class="mb-4">Fecha: <strong>${date}</strong></p>
+                    <p class="text-gray-600 mb-2">Selecciona un servicio para esta fecha:</p>
+                    <select id="booking-service" class="w-full px-4 py-2 border rounded-lg"></select>
+                    <div id="booking-message" class="mt-4 text-center"></div>
+                    <div class="flex justify-end gap-4 mt-4">
+                        <button onclick="closeBookingModal()" class="bg-gray-300 text-gray-800 font-bold py-2 px-6 rounded-lg">Cancelar</button>
+                        <button id="confirm-booking-button" class="bg-primary text-white font-bold py-2 px-6 rounded-lg">Confirmar y Reservar</button>
+                    </div>
+                </div>`;
+            
+            fetch(`${API_URL}/api/pilots/${pilotId}`).then(res => res.json()).then(pilot => {
+                const select = document.getElementById('booking-service');
+                select.innerHTML = '<option value="">-- Elige un servicio --</option>';
+                pilot.eventPackages.forEach(p => {
+                    select.innerHTML += `<option value="${p.id}">${p.name} - ${p.price}€</option>`;
+                });
+            });
+
+            document.getElementById('confirm-booking-button').onclick = () => {
+                const serviceId = document.getElementById('booking-service').value;
+                if (!serviceId) {
+                    document.getElementById('booking-message').innerText = "Debes seleccionar un servicio.";
+                    return;
+                }
+                handleBookingRequest(pilotId, date, serviceId);
+            };
+        }
+        function closeBookingModal() { document.getElementById('booking-modal').classList.add('hidden'); }
+
+        async function handleBookingRequest(pilotId, date, serviceId) {
+            const messageDiv = document.getElementById('booking-message');
+            try {
+                const response = await fetch(`${API_URL}/api/book`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ client_email: currentUser.email, pilot_id: pilotId, service_id: serviceId, date: date })
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error);
+                messageDiv.innerText = data.message;
+                setTimeout(() => { closeBookingModal(); closePilotDetailModal(); loadMyBookings(); }, 2000);
+            } catch (error) {
+                if(messageDiv) messageDiv.innerText = `Error: ${error.message}`;
+            }
+        }
+
+        async function loadMyBookings() {
+            if (!currentUser) return;
+            const listId = currentUser.role === 'Piloto' ? 'bookings-list' : 'client-bookings-list';
+            const list = document.getElementById(listId);
+            list.innerHTML = 'Cargando reservas...';
+            try {
+                const response = await fetch(`${API_URL}/api/bookings?email=${currentUser.email}`);
+                const bookings = await response.json();
+                list.innerHTML = '';
+                if (bookings.length === 0) {
+                    list.innerHTML = '<p>No tienes ninguna reserva.</p>';
+                    return;
+                }
+                bookings.forEach(booking => {
+                    const bookingCard = `<div class="border p-4 rounded-lg"><div class="flex justify-between items-start"><div><p class="font-semibold">${currentUser.role === 'Cliente' ? `Piloto: ${booking.pilot_name}` : `Cliente: ${booking.client_email}`}</p><p class="text-gray-600 text-sm">Servicio: ${booking.service_name} para el ${booking.booking_date}</p></div><div class="text-right"><span class="font-bold capitalize">${booking.status}</span></div></div></div>`;
+                    list.innerHTML += bookingCard;
+                });
+            } catch (error) {
+                list.innerHTML = '<p class="text-red-500">No se pudieron cargar las reservas.</p>';
+            }
+        }
+        
+        async function initializePilotCalendar() {
+            try {
+                const response = await fetch(`${API_URL}/api/pilots`);
+                const pilots = await response.json();
+                const myProfile = pilots.find(p => p.user_id === currentUser.id);
+                if (!myProfile) throw new Error("No se encontró el perfil del piloto.");
+                
+                const availableDates = myProfile.available_dates || [];
+                
+                pilotCalendar = new VanillaCalendar('#pilot-calendar', {
+                    dates: { selected: availableDates },
+                    settings: { 
+                        selection: { day: 'multiple-ranged' }, 
+                        visibility: { daysOutside: false },
+                        range: { disablePast: true }
+                    }
+                });
+                pilotCalendar.init();
+
+                document.getElementById('availability-save-button').addEventListener('click', handleAvailabilityUpdate);
+            } catch (error) {
+                document.getElementById('pilot-calendar').innerHTML = `<p class="text-red-500">Error al cargar el calendario. ${error.message}</p>`;
+            }
+        }
+
+        async function handleAvailabilityUpdate() {
+            if (!pilotCalendar) return;
+            const dates = pilotCalendar.selectedDates;
+            const messageDiv = document.getElementById('availability-message');
+            messageDiv.innerText = "Guardando...";
+            try {
+                const response = await fetch(`${API__URL}/api/profile/availability`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: currentUser.email, dates: dates })
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error);
+                messageDiv.innerText = data.message;
+            } catch (error) {
+                messageDiv.innerText = `Error: ${error.message}`;
+            }
+        }
+    </script>
+</body>
+</html>
