@@ -20,83 +20,51 @@
             </div>
         </div>
     </nav>
+
     <header id="hero-section" class="relative bg-cover bg-center h-96" style="background-image: url('https://images.pexels.com/photos/1034425/pexels-photo-1034425.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2');"></header>
+
     <main class="container mx-auto px-4 py-8">
+        <div id="pilot-dashboard-section" class="bg-white p-6 rounded-xl shadow-lg mb-12" style="display: none;">
+            <div class="border-b border-gray-200">
+                <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+                    <button onclick="switchTab('bookings')" id="tab-bookings" class="border-primary text-primary whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">Mis Reservas</button>
+                    <button onclick="switchTab('profile')" id="tab-profile" class="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">Editar Perfil y Portfolio</button>
+                </nav>
+            </div>
+            <div id="tab-content-bookings" class="py-4"><div id="bookings-list" class="space-y-4"></div></div>
+            <div id="tab-content-profile" class="py-4 hidden"></div>
+        </div>
+
+        <div id="client-bookings-section" class="bg-white p-6 rounded-xl shadow-lg mb-12" style="display: none;">
+            <h2 class="text-2xl font-bold text-secondary mb-4">Mis Reservas</h2>
+            <div id="client-bookings-list" class="space-y-4"></div>
+        </div>
+        
         <div id="public-content">
-            <h2 id="pilots-title" class="text-4xl font-bold text-secondary mb-8 text-center mt-8">Explora Nuestros Pilotos</h2>
+             <div id="ai-search-section" class="bg-white p-6 rounded-xl shadow-lg mb-12 -mt-20 relative z-10">
+                <h2 class="text-2xl font-bold text-secondary mb-4">Búsqueda Inteligente</h2>
+                <p class="text-gray-600 mb-4">Describe lo que necesitas y la IA te recomendará el mejor piloto.</p>
+                <div class="flex flex-col sm:flex-row gap-2">
+                    <input type="text" id="ai-search-input" placeholder="Ej: 'Piloto para grabar una boda en Madrid'" class="w-full px-4 py-2 border rounded-lg">
+                    <button id="ai-search-button" class="bg-accent text-secondary font-bold py-2 px-6 rounded-lg">Buscar con IA</button>
+                </div>
+                <div id="ai-result-container" class="mt-4 p-4 bg-blue-50 border-blue-200 rounded-lg hidden"></div>
+            </div>
+    
+            <h2 id="pilots-title" class="text-4xl font-bold text-secondary mb-8 text-center">Explora Nuestros Pilotos</h2>
             <div id="pilots-container" class="grid sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"></div>
         </div>
     </main>
+
     <div id="register-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden"></div>
     <div id="login-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden"></div>
+    <div id="booking-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden"></div>
+    <div id="pilot-detail-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden p-4">
+        <div id="pilot-detail-content" class="bg-white p-6 rounded-lg shadow-xl w-full max-w-2xl max-h-full overflow-y-auto"></div>
+    </div>
+    
     <script>
-        let currentUser = null;
-        const API_URL = 'https://drone-app-backend-znm5.onrender.com'; // URL de Producción
-
-        document.addEventListener('DOMContentLoaded', () => {
-            loadAllPilots();
-        });
-        
-        function openLoginModal() {
-            const modal = document.getElementById('login-modal');
-            modal.classList.remove('hidden');
-            modal.innerHTML = `<div class="bg-white p-6 rounded-xl shadow-lg w-full max-w-sm"><h2 class="text-2xl font-bold text-secondary mb-4">Iniciar Sesión</h2><div class="space-y-4"><input type="email" id="login-email" placeholder="Correo electrónico" class="w-full px-4 py-2 border rounded-lg"><input type="password" id="login-password" placeholder="Contraseña" class="w-full px-4 py-2 border rounded-lg"><button id="login-button-modal" class="w-full bg-primary text-white font-bold py-2 rounded-lg">Entrar</button><button onclick="closeLoginModal()" class="w-full bg-gray-200 text-gray-800 font-bold py-2 rounded-lg">Cancelar</button></div><div id="login-message" class="mt-4 text-center"></div></div>`;
-            document.getElementById('login-button-modal').addEventListener('click', handleLogin);
-        }
-        function closeLoginModal() { document.getElementById('login-modal').classList.add('hidden'); }
-
-        async function handleLogin() {
-            const email = document.getElementById('login-email').value;
-            const password = document.getElementById('login-password').value;
-            try {
-                const response = await fetch(`${API_URL}/api/login`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password })
-                });
-                const data = await response.json();
-                if (!response.ok) throw new Error(data.error);
-                currentUser = data.user;
-                updateUIAfterLogin();
-            } catch (error) {
-                document.getElementById('login-message').innerText = `Error: ${error.message}`;
-            }
-        }
-
-        function updateUIAfterLogin() {
-             if (!currentUser) return;
-            document.getElementById('nav-auth-links').classList.add('hidden');
-            const userInfo = document.getElementById('user-info');
-            userInfo.classList.remove('hidden');
-            userInfo.classList.add('flex');
-            userInfo.querySelector('span').innerText = currentUser.username;
-            closeLoginModal();
-        }
-
-         function handleLogout() {
-            currentUser = null;
-            document.getElementById('nav-auth-links').classList.remove('hidden');
-            document.getElementById('user-info').classList.add('hidden');
-        }
-
-        async function loadAllPilots() {
-            const container = document.getElementById('pilots-container');
-            container.innerHTML = '<p class="col-span-full text-center">Cargando pilotos...</p>';
-            try {
-                const response = await fetch(`${API_URL}/api/pilots`);
-                const pilots = await response.json();
-                container.innerHTML = '';
-                if (pilots.length === 0) {
-                    container.innerHTML = '<p class="col-span-full text-center">No hay pilotos registrados.</p>';
-                    return;
-                }
-                pilots.forEach(pilot => {
-                    const pilotCardHTML = `<div class="bg-white rounded-xl shadow-lg overflow-hidden flex flex-col"><img class="w-full h-56 object-cover" src="${pilot.profilePictureUrl}" alt="${pilot.name}"><div class="p-6 flex flex-col flex-grow"><h3 class="text-2xl font-semibold text-secondary mb-1">${pilot.name}</h3></div></div>`;
-                    container.innerHTML += pilotCardHTML;
-                });
-            } catch (error) {
-                container.innerHTML = '<p class="col-span-full text-center text-red-500">No se pudieron cargar los pilotos.</p>';
-            }
-        }
+        // ... (El script completo y estable que te pasé antes de empezar con el calendario)
     </script>
 </body>
-</html>https://drone-app-backend-znm5.onrender.com
+</html>

@@ -1,4 +1,5 @@
-from backend import app, db, User, PilotProfile
+import os
+from backend import app, db, User, PilotProfile, ServicePackage
 import bcrypt
 
 def seed_database():
@@ -28,5 +29,14 @@ def seed_database():
         db.session.add(client_user)
         db.session.add(pilot_user)
         db.session.commit()
-        
+        print("Usuarios y perfil guardados.")
+
+        profile_in_db = PilotProfile.query.first()
+        if profile_in_db:
+            service1 = ServicePackage(name="Paquete Boda Básico", description="4 horas de cobertura", price=800, pilot_profile_id=profile_in_db.id)
+            service2 = ServicePackage(name="Vídeo Inmobiliario", description="Propiedades de hasta 200m²", price=450, pilot_profile_id=profile_in_db.id)
+            db.session.add_all([service1, service2])
+            db.session.commit()
+            print("Servicios añadidos al perfil del piloto.")
+    
         print("\n¡Base de datos poblada con éxito!")
