@@ -2,5 +2,5 @@ Flask
 Flask-Cors
 Flask-SQLAlchemy
 bcrypt
-google-generativeai
 gunicorn
+psycopg2-binary
