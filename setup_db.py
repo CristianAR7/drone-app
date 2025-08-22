@@ -1,10 +1,11 @@
-from backend import app, db, User, PilotProfile
+from backend import app, db, User, PilotProfile, ServicePackage, Availability
 import bcrypt
+from datetime import date, timedelta
 
 def seed_database():
     with app.app_context():
         if User.query.count() > 0:
-            print("La base de datos ya contiene datos. Proceso de sembrado omitido.")
+            print("Base de datos ya contiene datos. Proceso de sembrado omitido.")
             return
 
         print("Base de datos vacía. Poblando con datos de prueba...")
@@ -23,5 +24,17 @@ def seed_database():
         db.session.add(client_user)
         db.session.add(pilot_user)
         db.session.commit()
+        print("Usuarios y perfil guardados.")
+
+        profile_in_db = PilotProfile.query.first()
+        if profile_in_db:
+            service1 = ServicePackage(name="Paquete Boda Básico", description="4 horas de cobertura", price=800, pilot_profile_id=profile_in_db.id)
+            db.session.add(service1)
+            
+            today = date.today()
+            db.session.add(Availability(date=today + timedelta(days=5), pilot_profile_id=profile_in_db.id))
+            
+            db.session.commit()
+            print("Servicios y disponibilidad añadidos al perfil del piloto.")
         
         print("\n¡Base de datos poblada con éxito!")

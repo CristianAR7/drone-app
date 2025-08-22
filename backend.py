@@ -93,15 +93,13 @@ class Availability(db.Model):
     pilot_profile_id = db.Column(db.Integer, db.ForeignKey('pilot_profile.id'), nullable=False)
 
 # --- LÓGICA DE INICIALIZACIÓN DE LA BD ---
-# Esta sección se ejecutará cuando Render inicie la aplicación
 try:
     with app.app_context():
         db.create_all()
         from setup_db import seed_database
         seed_database()
 except Exception as e:
-    print("Ocurrió un error durante la inicialización de la base de datos.")
-    print(e)
+    print(f"Error durante la inicialización de la BD: {e}")
 
 # --- RUTAS DE LA API ---
 @app.route('/uploads/<filename>')
@@ -230,7 +228,7 @@ def update_availability():
     Availability.query.filter_by(pilot_profile_id=user.pilot_profile.id).delete()
     for date_str in dates:
         date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
-        db.session.add(Availability(date=date_obj, status='available', pilot_profile_id=user.pilot_profile.id))
+        db.session.add(Availability(date=obj, status='available', pilot_profile_id=user.pilot_profile.id))
     db.session.commit()
     return jsonify({"message": "Disponibilidad actualizada con éxito"})
 
