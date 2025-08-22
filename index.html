@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DroneConnect</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/vanilla-js-calendar@1.0.1/build/vanilla-js-calendar.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/vanilla-js-calendar@1.0.1/build/vanilla-js-calendar.min.js"></script>
     <script>
     tailwind.config = {
         theme: { extend: { colors: { 'primary': '#3B82F6', 'secondary': '#1E293B', 'accent': '#FBBF24', 'light': '#F1F5F9', 'dark': '#0F172A' } } }
@@ -35,10 +37,18 @@
                 <nav class="-mb-px flex space-x-8" aria-label="Tabs">
                     <button onclick="switchTab('bookings')" id="tab-bookings" class="border-primary text-primary whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">Mis Reservas</button>
                     <button onclick="switchTab('profile')" id="tab-profile" class="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">Editar Perfil y Portfolio</button>
+                    <button onclick="switchTab('calendar')" id="tab-calendar" class="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">Mi Disponibilidad</button>
                 </nav>
             </div>
             <div id="tab-content-bookings" class="py-4"><div id="bookings-list" class="space-y-4"></div></div>
             <div id="tab-content-profile" class="py-4 hidden"></div>
+            <div id="tab-content-calendar" class="py-4 hidden">
+                 <h3 class="text-xl font-bold text-secondary mb-4">Gestionar Disponibilidad</h3>
+                 <p class="text-gray-600 mb-4">Haz clic en los días del calendario para marcarlos/desmarcarlos como disponibles. Pulsa guardar.</p>
+                 <div id="pilot-calendar" class="max-w-md mx-auto"></div>
+                 <div id="availability-message" class="mt-4 text-center"></div>
+                 <button id="availability-save-button" class="mt-4 w-full bg-accent text-secondary font-bold py-2 px-6 rounded-lg">Guardar Disponibilidad</button>
+            </div>
         </div>
 
         <div id="client-bookings-section" class="bg-white p-6 rounded-xl shadow-lg mb-12" style="display: none;">
@@ -71,6 +81,7 @@
     
     <script>
         let currentUser = null;
+        let pilotCalendar = null;
         const API_URL = 'https://drone-app-backend-znm5.onrender.com';
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -99,6 +110,7 @@
 
         function handleLogout() {
             currentUser = null;
+            pilotCalendar = null;
             document.getElementById('nav-auth-links').classList.remove('hidden');
             document.getElementById('user-info').classList.add('hidden');
             document.getElementById('client-bookings-section').style.display = 'none';
@@ -108,15 +120,23 @@
         }
 
         function switchTab(tabName) {
-            const tabs = ['bookings', 'profile'];
+            const tabs = ['bookings', 'profile', 'calendar'];
             tabs.forEach(tab => {
-                document.getElementById(`tab-content-${tab}`).classList.add('hidden');
-                document.getElementById(`tab-${tab}`).classList.remove('border-primary', 'text-primary');
+                const content = document.getElementById(`tab-content-${tab}`);
+                const button = document.getElementById(`tab-${tab}`);
+                if (tab === tabName) {
+                    content.classList.remove('hidden');
+                    button.classList.add('border-primary', 'text-primary');
+                    button.classList.remove('border-transparent', 'text-gray-500');
+                } else {
+                    content.classList.add('hidden');
+                    button.classList.add('border-transparent', 'text-gray-500');
+                    button.classList.remove('border-primary', 'text-primary');
+                }
             });
-            document.getElementById(`tab-content-${tabName}`).classList.remove('hidden');
-            document.getElementById(`tab-${tabName}`).classList.add('border-primary', 'text-primary');
 
             if (tabName === 'profile') renderProfileForm();
+            if (tabName === 'calendar') initializePilotCalendar();
             if (tabName === 'bookings') loadMyBookings();
         }
         
@@ -185,10 +205,7 @@
                     portfolioHTML = pilot.portfolio.map(item => `<img src="${API_URL}${item.url}" class="w-full h-40 object-cover rounded-lg shadow-md">`).join('');
                 }
                 
-                let bookingButtonHTML = '';
-                if (currentUser && currentUser.role === 'Cliente') {
-                    bookingButtonHTML = `<button onclick="openBookingModal(${pilot.id}, '${pilot.name}')" class="mt-6 w-full text-center bg-accent text-secondary font-semibold py-2 px-4 rounded-lg">Solicitar Reserva</button>`;
-                }
+                let calendarHTML = `<div id="client-calendar" class="max-w-md mx-auto"></div>`;
                 
                 content.innerHTML = `
                     <div class="flex justify-between items-start">
@@ -202,8 +219,41 @@
                     <div class="space-y-2 mb-6">${servicesHTML}</div>
                     <h3 class="text-xl font-bold text-secondary mb-3">Portfolio</h3>
                     <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">${portfolioHTML}</div>
-                    ${bookingButtonHTML}
+                    <h3 class="text-xl font-bold text-secondary mb-3">Disponibilidad (Haz clic en un día para reservar)</h3>
+                    ${calendarHTML}
                 `;
+
+                const clientCalendar = new VanillaCalendar('#client-calendar', {
+                    dates: {
+                        today: new Date(),
+                        available: pilot.available_dates,
+                    },
+                    settings: {
+                        range: {
+                            disablePast: true,
+                        },
+                        selection: {
+                            day: 'single',
+                        },
+                        visibility: {
+                            daysOutside: false,
+                        },
+                    },
+                    actions: {
+                        clickDay(e, self) {
+                            if (!currentUser || currentUser.role !== 'Cliente') {
+                                alert('Por favor, inicia sesión como cliente para reservar.');
+                                return;
+                            }
+                            if (self.selectedDates.length > 0 && pilot.eventPackages.length > 0) {
+                                openBookingModal(pilot.id, pilot.name, self.selectedDates[0]);
+                            } else if (pilot.eventPackages.length === 0) {
+                                alert('Este piloto no tiene servicios definidos para reservar.');
+                            }
+                        }
+                    }
+                });
+                clientCalendar.init();
             } catch (error) {
                 content.innerHTML = `<p class="text-red-500">No se pudo cargar el perfil del piloto. ${error.message}</p>`;
             }
@@ -271,7 +321,7 @@
                             <div class="p-6 flex flex-col flex-grow">
                                 <h3 class="text-2xl font-semibold text-secondary mb-1">${pilot.name}</h3>
                                 <p class="text-gray-600 text-sm mb-3 flex-grow">${pilot.tagline || ''}</p>
-                                <button onclick="openPilotDetailModal(${pilot.id})" class="mt-auto w-full text-center bg-primary text-white font-semibold py-2 px-4 rounded-lg">Ver Perfil</button>
+                                <button onclick="openPilotDetailModal(${pilot.id})" class="mt-auto w-full text-center bg-primary text-white font-semibold py-2 px-4 rounded-lg">Ver Perfil y Disponibilidad</button>
                             </div>
                         </div>`;
                     container.innerHTML += pilotCardHTML;
@@ -581,7 +631,7 @@
             const messageDiv = document.getElementById('availability-message');
             messageDiv.innerText = "Guardando...";
             try {
-                const response = await fetch(`${API__URL}/api/profile/availability`, {
+                const response = await fetch(`${API_URL}/api/profile/availability`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ email: currentUser.email, dates: dates })

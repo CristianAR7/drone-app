@@ -19,7 +19,7 @@ db = SQLAlchemy(app)
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # --- INSERTA TU API KEY DE GOOGLE AQUÍ ---
-GOOGLE_API_KEY = "AIzaSyCjST_lyf9SH2bU6PLhUVlx0bf3XwDRSJk"
+GOOGLE_API_KEY = "TU_API_KEY_AQUI"
 try:
     genai.configure(api_key=GOOGLE_API_KEY)
     model = genai.GenerativeModel('gemini-1.5-flash')
@@ -92,7 +92,18 @@ class Availability(db.Model):
     status = db.Column(db.String(20), nullable=False, default='available')
     pilot_profile_id = db.Column(db.Integer, db.ForeignKey('pilot_profile.id'), nullable=False)
 
-# --- RUTAS DE LA API (todas las que ya teníamos) ---
+# --- LÓGICA DE INICIALIZACIÓN DE LA BD ---
+# Esta sección se ejecutará cuando Render inicie la aplicación
+try:
+    with app.app_context():
+        db.create_all()
+        from setup_db import seed_database
+        seed_database()
+except Exception as e:
+    print("Ocurrió un error durante la inicialización de la base de datos.")
+    print(e)
+
+# --- RUTAS DE LA API ---
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
     return send_from_directory(os.path.join(app.instance_path, 'static', 'uploads'), filename)
@@ -228,7 +239,6 @@ if __name__ == "__main__":
     with app.app_context():
         db.create_all()
         # Importamos la función de nuestro script de setup y la ejecutamos.
-        # Esto rellenará la base de datos la primera vez que arranque el servidor.
         from setup_db import seed_database
         seed_database()
         
