@@ -1,6 +1,5 @@
-from backend import app, db, User, PilotProfile, ServicePackage, Availability
+from backend import app, db, User, PilotProfile
 import bcrypt
-from datetime import date, timedelta
 
 def seed_database():
     with app.app_context():
@@ -24,17 +23,5 @@ def seed_database():
         db.session.add(client_user)
         db.session.add(pilot_user)
         db.session.commit()
-        print("Usuarios y perfil guardados.")
-
-        profile_in_db = PilotProfile.query.first()
-        if profile_in_db:
-            service1 = ServicePackage(name="Paquete Boda Básico", description="4 horas de cobertura", price=800, pilot_profile_id=profile_in_db.id)
-            db.session.add(service1)
-            
-            today = date.today()
-            db.session.add(Availability(date=today + timedelta(days=5), pilot_profile_id=profile_in_db.id))
-            
-            db.session.commit()
-            print("Servicios y disponibilidad añadidos al perfil del piloto.")
         
         print("\n¡Base de datos poblada con éxito!")
