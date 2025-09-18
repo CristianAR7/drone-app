@@ -16,10 +16,24 @@ def seed_database():
         pilot_hashed = bcrypt.hashpw(pilot_password.encode('utf-8'), bcrypt.gensalt())
         pilot_user = User(username='piloto_test', email='piloto@test.com', password=pilot_hashed.decode('utf-8'), role='Piloto')
         
-        profile = PilotProfile(name='AeroVision Pro')
+        profile = PilotProfile(
+            name='AeroVision Pro', 
+            tagline='Cinematografía Aérea Avanzada', 
+            location='Madrid, ES', 
+            bio='Más de 10 años de experiencia en filmaciones.'
+        )
         pilot_user.pilot_profile = profile
         
         db.session.add(client_user)
         db.session.add(pilot_user)
         db.session.commit()
         print("Usuarios y perfil guardados.")
+
+        profile_in_db = PilotProfile.query.first()
+        if profile_in_db:
+            service1 = ServicePackage(name="Paquete Boda Básico", description="4 horas de cobertura", price=800, pilot_profile_id=profile_in_db.id)
+            db.session.add(service1)
+            db.session.commit()
+            print("Servicios añadidos al perfil del piloto.")
+    
+        print("\n¡Base de datos poblada con éxito!")
